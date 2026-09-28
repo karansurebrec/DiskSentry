@@ -13,6 +13,8 @@ on:
 jobs:
   build:
     runs-on: windows-latest
+    permissions:
+      contents: write   # required to attach DiskSentry.exe to the Release
     steps:
       - name: Checkout
         uses: actions/checkout@v4
