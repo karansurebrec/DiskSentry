@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>DISK://SENTRY — Storage Telemetry Console</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23071210'/%3E%3Ccircle cx='32' cy='32' r='18' fill='none' stroke='%2300ff66' stroke-width='4'/%3E%3Ccircle cx='32' cy='32' r='5' fill='%2300ff66'/%3E%3Cpath d='M32 14v10' stroke='%2322d3ee' stroke-width='4' stroke-linecap='round'/%3E%3C/svg%3E"/>
+<link rel="stylesheet" href="/static/style.css"/>
+</head>
+<body>
+<div class="fx-scan" aria-hidden="true"></div>
+
+<div class="shell">
+
+  <!-- ======================= HEADER ======================= -->
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-glyph" aria-hidden="true"></span>
+      <div class="brand-text">
+        <h1>DISK<span class="dim">://</span>SENTRY</h1>
+        <span class="brand-sub">STORAGE TELEMETRY CONSOLE</span>
+      </div>
+    </div>
+    <div class="ticker" id="ticker" role="status">BOOTING<span class="blink">_</span></div>
+    <div class="top-right">
+      <span class="host-badge" id="host-badge" title="interface shell">···</span>
+      <span class="mode-badge" id="mode-badge" title="telemetry source">···</span>
+      <span class="clock" id="clock">--:--:--</span>
+      <button class="btn" id="btn-scan" title="Rescan all drives [R]">RESCAN</button>
+    </div>
+  </header>
+
+  <!-- ======================= OVERVIEW ======================= -->
+  <section class="section" aria-labelledby="h-ov">
+    <div class="sec-head"><h2 id="h-ov">SYSTEM OVERVIEW</h2><span class="sec-rule"></span></div>
+    <div class="tiles" id="tiles">
+      <div class="tile skel" style="min-height:112px"></div>
+      <div class="tile skel" style="min-height:112px"></div>
+      <div class="tile skel" style="min-height:112px"></div>
+      <div class="tile skel" style="min-height:112px"></div>
+    </div>
+  </section>
+
+  <!-- ======================= DRIVES ======================= -->
+  <section class="section" aria-labelledby="h-dr">
+    <div class="sec-head">
+      <h2 id="h-dr">PHYSICAL DRIVES</h2>
+      <span class="sec-count" id="drive-count"></span>
+      <span class="sec-rule"></span>
+    </div>
+    <div class="drive-grid" id="drives"></div>
+
+    <div class="empty" id="empty" hidden>
+      <pre class="ascii" aria-hidden="true">
+   ______  ______ ___  ___ ______
+  |  _  \ | ___ \|  \/  ||  ___|
+  | | | | | |_/ /| .  . || |__
+  | | | | | ___ \| |\/| ||  __|
+  | |/ /  | |_/ /| |  | || |___
+  |___/   \____/ \_|  |_/|____/  ·  NO DRIVES DETECTED</pre>
+      <p class="empty-sub" id="empty-sub">
+        Run as Administrator on Windows and (optionally) install smartmontools for full SMART access.
+      </p>
+      <div class="empty-actions">
+        <button class="btn btn-primary" id="btn-sim">ENABLE SIMULATION MODE</button>
+        <button class="btn" id="btn-rescan2">RESCAN</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======================= PROCESS I/O ======================= -->
+  <section class="section" aria-labelledby="h-pr">
+    <div class="sec-head">
+      <h2 id="h-pr">PROCESS I/O · TOP WRITERS</h2>
+      <span class="sec-count" id="proc-count"></span>
+      <span class="proc-demo" id="proc-demo" hidden>SIMULATED</span>
+      <span class="sec-rule"></span>
+    </div>
+
+    <div class="pstats" id="pstats">
+      <div class="pstat">
+        <span class="lbl">TOP WRITER</span>
+        <div class="pval amber pval-name" id="ps-top">—</div>
+        <div class="psub" id="ps-top-sub">—</div>
+      </div>
+      <div class="pstat">
+        <span class="lbl">ALL PROCESSES · WRITE</span>
+        <div class="pval amber" id="ps-wr">—</div>
+        <div class="psub" id="ps-wr-sub">—</div>
+      </div>
+      <div class="pstat">
+        <span class="lbl">ALL PROCESSES · READ</span>
+        <div class="pval cyan" id="ps-rd">—</div>
+        <div class="psub" id="ps-rd-sub">—</div>
+      </div>
+      <div class="pstat">
+        <span class="lbl">PROCESSES TRACKED</span>
+        <div class="pval" id="ps-n">—</div>
+        <div class="psub" id="ps-n-sub">—</div>
+      </div>
+      <div class="pstat">
+        <span class="lbl">BUSIEST TARGET DRIVE</span>
+        <div class="pval amber pval-name" id="ps-drv">—</div>
+        <div class="psub" id="ps-drv-sub">—</div>
+      </div>
+    </div>
+
+    <div class="proc-tools">
+      <input type="text" id="proc-q" placeholder="filter programs…" autocomplete="off" spellcheck="false"/>
+      <label class="pt-sel">SORT
+        <select id="proc-sort">
+          <option value="write_rate" selected>WRITE RATE</option>
+          <option value="read_rate">READ RATE</option>
+          <option value="write_session">SESSION WRITES</option>
+          <option value="write_total">LIFETIME WRITES</option>
+          <option value="name">NAME</option>
+        </select>
+      </label>
+      <label class="pt-sel">SHOW
+        <select id="proc-top">
+          <option value="10">TOP 10</option>
+          <option value="15" selected>TOP 15</option>
+          <option value="25">TOP 25</option>
+          <option value="50">TOP 50</option>
+          <option value="0">ALL</option>
+        </select>
+      </label>
+      <label class="pt-chk"><input type="checkbox" id="proc-group"/> GROUP BY PROGRAM</label>
+    </div>
+
+    <div class="tbl-wrap proc-wrap">
+      <table class="tbl proc-tbl">
+        <thead><tr>
+          <th class="num">#</th>
+          <th>PROGRAM</th>
+          <th class="num">PID</th>
+          <th class="num">READ/s</th>
+          <th class="num pw-head">WRITE/s</th>
+          <th class="pr-dr-head">WRITING TO</th>
+          <th class="num">SESSION W · R</th>
+          <th class="num">LIFETIME WRITE</th>
+        </tr></thead>
+        <tbody id="proc-body">
+          <tr><td colspan="8" class="proc-wait">sampling process I/O<span class="blink">_</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="db-wrap">
+      <div class="db-head">
+        <h3>WHERE THE WRITES GO · DRIVE BY DRIVE</h3>
+        <span class="sec-rule"></span>
+      </div>
+      <div id="pdrive" class="db-list">
+        <div class="db-wait">attributing process writes to drives<span class="blink">_</span></div>
+      </div>
+    </div>
+
+    <div class="proc-note">
+      WRITING TO shows which drive each program is writing through — attributed from its open
+      file handles (click a row to see the actual file paths). Drive-level WRITE rates are exact
+      kernel disk counters; the per-program split across drives is estimated from handles. The gap
+      between the two = OS kernel, cache flushes and protected processes. SESSION = bytes since
+      DiskSentry started · LIFETIME = since the process started. Windows per-process I/O counters
+      include file, disk and pipe traffic. Run DiskSentry as Administrator for full visibility.
+    </div>
+  </section>
+
+  <!-- ======================= EVENTS ======================= -->
+  <section class="section" aria-labelledby="h-ev">
+    <div class="sec-head"><h2 id="h-ev">EVENT LOG</h2><span class="sec-rule"></span></div>
+    <div class="eventlog" id="events" role="log" aria-live="polite"></div>
+  </section>
+
+  <footer class="foot">
+    <span id="foot-info">DiskSentry v1.3.1</span>
+    <span class="foot-right">ESC&nbsp;CLOSE&nbsp;·&nbsp;R&nbsp;RESCAN&nbsp;·&nbsp;1s&nbsp;POLL</span>
+  </footer>
+</div>
+
+<!-- ======================= DETAIL PANEL ======================= -->
+<div class="backdrop" id="backdrop" hidden></div>
+<aside class="panel" id="panel" aria-hidden="true" role="dialog" aria-label="Drive detail report">
+  <div class="panel-head">
+    <div class="panel-head-txt">
+      <div class="panel-title" id="p-title">—</div>
+      <div class="panel-sub" id="p-sub">—</div>
+    </div>
+    <button class="btn btn-ghost" id="btn-close" title="Close [ESC]">CLOSE ✕</button>
+  </div>
+  <nav class="tabs" id="tabs" role="tablist">
+    <button class="tab active" data-tab="overview" role="tab">OVERVIEW</button>
+    <button class="tab" data-tab="smart" role="tab">SMART TABLE</button>
+    <button class="tab" data-tab="endurance" role="tab">ENDURANCE · TBW</button>
+    <button class="tab" data-tab="io" role="tab">I/O · PERFORMANCE</button>
+    <button class="tab" data-tab="identity" role="tab">IDENTITY</button>
+  </nav>
+  <div class="panel-body">
+    <div class="tabpane active" id="tab-overview" role="tabpanel"></div>
+    <div class="tabpane" id="tab-smart" role="tabpanel"></div>
+    <div class="tabpane" id="tab-endurance" role="tabpanel"></div>
+    <div class="tabpane" id="tab-io" role="tabpanel"></div>
+    <div class="tabpane" id="tab-identity" role="tabpanel"></div>
+  </div>
+</aside>
+
+<div class="toast" id="toast" role="status"></div>
+
+<script src="/static/charts.js"></script>
+<script src="/static/app.js"></script>
+</body>
+</html>

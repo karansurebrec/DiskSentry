@@ -1,0 +1,24 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# --- PyInstaller build output ---
+build/
+dist/
+build_out/
+*.spec.bak
+
+# --- Runtime data (per-user, never belongs in the repo) ---
+*.log
+disksentry.log
+
+# --- OS / editor noise ---
+Thumbs.db
+desktop.ini
+.DS_Store
+*.swp
+.idea/
+.vscode/

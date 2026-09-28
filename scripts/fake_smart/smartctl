@@ -1,0 +1,145 @@
+#!/usr/bin/env bash
+# Fake smartctl (smartmontools 7.4 emulator) for offline testing of the
+# DiskSentry Windows code path. Replicates the reporter's machine:
+#   Seagate ZP1024CM30002 NVMe 1TB, PowerShell serial "6479_A78A_6F00_09F6."
+#   while smartctl reports serial "6479A78A6F0009F6".
+#
+# Scenario via $FAKE_SCENARIO:
+#   ok          - scan lists /dev/nvme0 (device_list key), -i/-a return data
+#   deviceskey  - scan JSON uses the non-standard "devices" key
+#   textscan    - --scan --json=c fails; plain text --scan works (pd + PhysicalDrive)
+#   fail        - scan works but every device read fails ("Unable to detect
+#                 device type") -> app must fall back to PowerShell counters
+#   noscan      - smartctl exists but scan returns nothing and reads fail
+#   usb         - Innostor USB enclosure on /dev/pd0: auto/ata/scsi reads ALL
+#                 fail, only '-d sat,12' returns the ATA SMART payload behind
+#                 the bridge (tests the dialect probe)
+#   usbdead     - USB bridge that ignores every dialect -> probe exhausts ->
+#                 PowerShell fallback + negative bridge hint
+args="$*"
+scenario="${FAKE_SCENARIO:-ok}"
+
+if [[ "$args" == *"--version"* || "$args" == "-V"* || "$args" == "--copyright"* ]]; then
+  echo "smartctl 7.4 5320 [x86_64-w64-mingw32] 2024-..."
+  exit 0
+fi
+
+emit_error() {  # $1 = device name
+  local dev_json="${1//\\/\\\\}"   # JSON-escape backslashes like real smartctl
+  cat <<EOF
+{"json_format_version":[1,0],"smartctl":{"version":[7,4],"messages":[{"string":"Unable to detect device type"}],"exit_status":1},"device":{"name":"$dev_json","info_name":"$dev_json","type":"","protocol":""}}
+EOF
+  exit 1
+}
+
+emit_scan_json() {  # $1 = array key
+  cat <<EOF
+{"json_format_version":[1,0],"smartctl":{"version":[7,4],"svn_revision":"5320","platform_info":"x86_64-w64-mingw32","exit_status":0},"$1":[{"name":"/dev/nvme0","info_name":"/dev/nvme0 [\\\\\\\\.\\\\PhysicalDrive0]","type":"nvme","protocol":"NVMe","deprecated":false},{"name":"/dev/pd1","info_name":"\\\\\\\\.\\\\PhysicalDrive1","type":"ata","protocol":"ATA","deprecated":false}]}
+EOF
+  exit 0
+}
+
+emit_scan_json_bare() {  # $1 = array key — no PhysicalDrive hints at all
+  cat <<EOF
+{"json_format_version":[1,0],"smartctl":{"version":[7,4],"svn_revision":"5320","platform_info":"x86_64-w64-mingw32","exit_status":0},"$1":[{"name":"/dev/nvme0","info_name":"/dev/nvme0","type":"nvme","protocol":"NVMe","deprecated":false}]}
+EOF
+  exit 0
+}
+
+emit_scan_usb() {  # the Innostor enclosure enumerates as pd0 with (wrong) 'ata' type
+  cat <<EOF
+{"json_format_version":[1,0],"smartctl":{"version":[7,4],"svn_revision":"5320","platform_info":"x86_64-w64-mingw32","exit_status":0},"device_list":[{"name":"/dev/pd0","info_name":"\\\\\\\\.\\\\PhysicalDrive0 [Innostor USB bridge]","type":"ata","protocol":"ATA","deprecated":false}]}
+EOF
+  exit 0
+}
+
+emit_scan_text() {
+  cat <<'EOF'
+/dev/nvme0 -d nvme # "\\.\PhysicalDrive0" "Seagate ZP1024CM30002" "SUNSY080"
+/dev/pd1 -d ata # "\\.\PhysicalDrive1" "WDC WD10EZEX-08WN4A0" "01.01A01"
+EOF
+  exit 0
+}
+
+emit_identity() {
+  cat <<'EOF'
+{"json_format_version":[1,0],"smartctl":{"version":[7,4],"exit_status":0},"device":{"name":"/dev/nvme0","info_name":"/dev/nvme0","type":"nvme","protocol":"NVMe"},"model_name":"ZP1024CM30002","serial_number":"6479A78A6F0009F6","firmware_version":"SUNSY080","user_capacity":{"blocks":2000409264,"blocks_s":"512","bytes":1024209543168},"logical_block_size":512,"nvme_pci_vendor":{"vendor_id":68864,"subsystem_id":68864},"nvme_ieee_oui_identifier":5249184,"nvme_controller_id":5,"nvme_number_of_namespaces":1,"nvme_namespaces":[{"id":1,"size":{"blocks":2000409264,"bytes":1024209543168},"capacity":{"blocks":2000409264,"bytes":1024209543168},"utilization":{"blocks":1717986918,"bytes":879609302016},"formatted_lba_size":512}],"smart_status":{"nvme":{"value":0},"passed":true}}
+EOF
+  exit 0
+}
+
+emit_full() {
+  cat <<'EOF'
+{"json_format_version":[1,0],"smartctl":{"version":[7,4],"exit_status":0},"device":{"name":"/dev/nvme0","info_name":"/dev/nvme0","type":"nvme","protocol":"NVMe"},"model_name":"ZP1024CM30002","serial_number":"6479A78A6F0009F6","firmware_version":"SUNSY080","user_capacity":{"blocks":2000409264,"blocks_s":"512","bytes":1024209543168},"logical_block_size":512,"nvme_pci_vendor":{"vendor_id":68864,"subsystem_id":68864},"nvme_ieee_oui_identifier":5249184,"nvme_controller_id":5,"nvme_number_of_namespaces":1,"nvme_namespaces":[{"id":1,"size":{"blocks":2000409264,"bytes":1024209543168},"capacity":{"blocks":2000409264,"bytes":1024209543168},"utilization":{"blocks":1717986918,"bytes":879609302016},"formatted_lba_size":512}],"smart_status":{"nvme":{"value":0},"passed":true},"nvme_smart_health_information_log":{"critical_warning":0,"temperature":42,"available_spare":100,"available_spare_threshold":10,"percentage_used":3,"data_units_read":21644958,"data_units_written":9883238,"host_read_commands":214913076,"host_write_commands":102349781,"controller_busy_time":1464,"power_cycles":1511,"power_on_hours":4203,"unsafe_shutdowns":42,"media_errors":0,"num_err_log_entries":168,"warning_temp_time":0,"critical_comp_time":0,"temperature_sensors":{"1":42,"2":47}},"temperature":{"current":42,"power_cycle_min":30,"power_cycle_max":48,"lifetime_min":22,"lifetime_max":51,"op_limit_max":70,"critical_limit_max":80,"drive_trip":85}}
+EOF
+  exit 0
+}
+
+emit_usb_identity() {  # behind the Innostor bridge, only via -d sat,12
+  cat <<'EOF'
+{"json_format_version":[1,0],"smartctl":{"version":[7,4],"exit_status":0},"device":{"name":"/dev/pd0","info_name":"/dev/pd0 [Innostor USB bridge]","type":"sat,12","protocol":"ATA"},"model_name":"WDC WD3200BEVT-22A23T0","model_family":"Western Digital Scorpio Blue","serial_number":"20240906","firmware_version":"01.01A01","user_capacity":{"blocks":625142448,"blocks_s":"512","bytes":320072933376},"rotation_rate":5400}
+EOF
+  exit 0
+}
+
+emit_usb_full() {  # ATA attribute payload behind the Innostor bridge, via -d sat,12
+  cat <<'EOF'
+{"json_format_version":[1,0],"smartctl":{"version":[7,4],"exit_status":0},"device":{"name":"/dev/pd0","info_name":"/dev/pd0 [Innostor USB bridge]","type":"sat,12","protocol":"ATA"},"model_name":"WDC WD3200BEVT-22A23T0","model_family":"Western Digital Scorpio Blue","serial_number":"20240906","firmware_version":"01.01A01","user_capacity":{"blocks":625142448,"blocks_s":"512","bytes":320072933376},"rotation_rate":5400,"logical_block_size":512,"smart_status":{"passed":true},"temperature":{"current":38},"ata_smart_attributes":{"table":[{"id":5,"name":"Reallocated_Sector_Ct","value":200,"worst":200,"thresh":140,"raw":{"value":0,"string":"0"}},{"id":9,"name":"Power_On_Hours","value":92,"worst":92,"thresh":0,"raw":{"value":2981,"string":"2981"}},{"id":12,"name":"Power_Cycle_Count","value":99,"worst":99,"thresh":0,"raw":{"value":1517,"string":"1517"}},{"id":194,"name":"Temperature_Celsius","value":113,"worst":105,"thresh":0,"raw":{"value":38,"string":"38"}},{"id":241,"name":"Total_LBAs_Written","value":100,"worst":100,"thresh":0,"raw":{"value":9765625000,"string":"9765625000"}},{"id":242,"name":"Total_LBAs_Read","value":100,"worst":100,"thresh":0,"raw":{"value":39062500000,"string":"39062500000"}}]},"ata_smart_error_log":{"summary":{"count":0}}}
+EOF
+  exit 0
+}
+
+# ---------------- dispatch ----------------
+if [[ "$args" == *"--scan"* ]]; then
+  if [[ "$args" == *"--json=c"* ]]; then
+    case "$scenario" in
+      ok)         emit_scan_json "device_list" ;;
+      bare)       emit_scan_json_bare "device_list" ;;
+      deviceskey) emit_scan_json "devices" ;;
+      fail)       emit_scan_json "device_list" ;;
+      usb|usbdead) emit_scan_usb ;;
+      textscan|noscan) exit 1 ;;
+    esac
+  fi
+  # plain text scan
+  case "$scenario" in
+    textscan) emit_scan_text ;;
+    *) exit 1 ;;
+  esac
+fi
+
+# device reads: only /dev/nvme0 (and pd0 alias) succeed in ok-ish scenarios
+dev="${!#}"
+dialect=""
+prev=""
+for a in $args; do
+  if [[ "$prev" == "-d" ]]; then dialect="$a"; fi
+  prev="$a"
+done
+case "$scenario" in
+  ok|bare|deviceskey|textscan)
+    if [[ "$dev" == "/dev/nvme0" || "$dev" == "/dev/pd0" || "$dev" == "pd0" ]]; then
+      if [[ "$args" == "-i"* ]]; then emit_identity; fi
+      emit_full
+    fi
+    emit_error "$dev"
+    ;;
+  usb)
+    if [[ "$dev" == "/dev/pd0" || "$dev" == "pd0" ]]; then
+      # the Innostor bridge ONLY answers SAT with a 12-byte CDB
+      if [[ "$dialect" == "sat,12" ]]; then
+        if [[ "$args" == "-i"* ]]; then emit_usb_identity; fi
+        emit_usb_full
+      fi
+      emit_error "$dev"
+    fi
+    emit_error "$dev"
+    ;;
+  usbdead)
+    emit_error "$dev"
+    ;;
+  fail|noscan)
+    emit_error "$dev"
+    ;;
+esac
+emit_error "unknown"
